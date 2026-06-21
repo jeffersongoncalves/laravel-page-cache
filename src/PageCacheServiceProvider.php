@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JeffersonGoncalves\PageCache;
 
 use Spatie\LaravelPackageTools\Package;
