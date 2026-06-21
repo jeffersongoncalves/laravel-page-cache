@@ -22,10 +22,26 @@ return [
     |--------------------------------------------------------------------------
     |
     | How long (in seconds) a cached page is kept before it is regenerated.
+    | A value of 0 (or below) means "cache forever" — the entry is stored with
+    | Cache::forever() and only cleared by flush() or your cache driver.
     |
     */
 
     'ttl' => (int) env('PAGE_CACHE_TTL', 3600),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Include Query String
+    |--------------------------------------------------------------------------
+    |
+    | When enabled (the safe default), a normalized (sorted) query string is
+    | folded into the cache key so /products?page=2 is stored separately from
+    | /products?page=1. Disable this only for routes you know ignore the query
+    | string entirely.
+    |
+    */
+
+    'include_query_string' => env('PAGE_CACHE_INCLUDE_QUERY_STRING', true),
 
     /*
     |--------------------------------------------------------------------------

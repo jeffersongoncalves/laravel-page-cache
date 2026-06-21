@@ -33,7 +33,11 @@ This is the contents of the published config file:
 return [
     'enabled' => env('PAGE_CACHE_ENABLED', true),
 
+    // A TTL of 0 (or below) means "cache forever".
     'ttl' => (int) env('PAGE_CACHE_TTL', 3600),
+
+    // Fold a normalized query string into the cache key (safe default).
+    'include_query_string' => env('PAGE_CACHE_INCLUDE_QUERY_STRING', true),
 
     'key' => [
         'locale' => true,
@@ -48,19 +52,29 @@ return [
 
 ## Usage
 
-Register `CachePublicPage` as the outermost middleware on your public route group so cached responses are served before any other middleware runs:
+Register `CachePublicPage` **after** `StartSession` and the authentication middleware — i.e. inside your `web` middleware group, not as the outermost middleware. The cache deliberately depends on a started session to tell guests from authenticated users, and registering it before `StartSession` would make it bail out on every request:
 
 ```php
 use Illuminate\Support\Facades\Route;
 use JeffersonGoncalves\PageCache\Middleware\CachePublicPage;
 
-Route::middleware(CachePublicPage::class)->group(function () {
+Route::middleware(['web', CachePublicPage::class])->group(function () {
     Route::get('/', HomeController::class);
     Route::get('/{slug}', ShowController::class);
 });
 ```
 
-The first request to a path is computed normally and stored with an `X-Page-Cache: MISS` header. Subsequent requests are served straight from the cache with an `X-Page-Cache: HIT` header. Only stateless `GET` requests that return a `200` response from a guest (unauthenticated) visitor are cached.
+The first request to a path is computed normally and stored with an `X-Page-Cache: MISS` header. Subsequent requests are served straight from the cache with an `X-Page-Cache: HIT` header. Only stateless `GET` requests that return a `200` response from a guest (unauthenticated) visitor are cached, and the full response header bag (minus `Set-Cookie`) is replayed on a cache hit.
+
+### What is never cached (important)
+
+To avoid leaking per-visitor state across visitors, the middleware **passes the request through untouched** (no read, no write) when any of the following is true:
+
+- the request is authenticated (`$request->user()` is not `null`);
+- there is no started session (so register it **after** `StartSession`);
+- the response sets its own cookies (`Set-Cookie`).
+
+That last rule is a hard safety guard: **pages that render a CSRF token, a form, flash messages, or any guest-session content must not be cached**, because those responses carry a `Set-Cookie` header and would otherwise replay one visitor's token/session to everyone else. Keep such pages out of the cached route group entirely.
 
 ### Invalidating the cache
 
@@ -87,7 +101,9 @@ class ProjectObserver
 
 ### Cache key
 
-By default the cache key is composed of the version token, the current locale, the theme cookie value, and a hash of the request path. You can disable the locale or theme segments — or change the theme cookie name — through the config file. The path (not the full URL) is used so the query string cannot flood the cache with variants.
+By default the cache key is composed of the version token, the current locale, the theme cookie value, a hash of the request path, and a hash of a normalized (sorted) query string. You can disable the locale or theme segments — or change the theme cookie name — through the config file.
+
+The path (not the full URL) is used for the path segment, and the query string is normalized and hashed separately so that `?b=2&a=1` and `?a=1&b=2` collapse to the same entry while `/products?page=2` stays distinct from `/products?page=1`. If a route ignores the query string entirely you can drop it from the key by setting `include_query_string` to `false`.
 
 ## Testing
 
