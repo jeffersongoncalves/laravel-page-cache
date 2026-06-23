@@ -54,7 +54,10 @@ class CachePublicPage
         }
 
         $headers = $response->headers->all();
-        unset($headers['set-cookie']);
+        // Drop Set-Cookie (per-visitor state) and the original Date header: a
+        // stored Date would be served stale on every later HIT, so we let the
+        // replayed response generate a fresh one instead.
+        unset($headers['set-cookie'], $headers['date']);
 
         $payload = [
             'content' => (string) $response->getContent(),
@@ -79,7 +82,13 @@ class CachePublicPage
     /** Bump the version token to invalidate every cached page. */
     public static function flush(): void
     {
-        Cache::forever(self::VERSION_KEY, self::version() + 1);
+        // Atomic bump: read-modify-write (Cache::forever(version() + 1)) loses
+        // an increment when two flushes race. Seed the key if missing, then let
+        // the store increment it atomically. Old entries keyed on the previous
+        // version become unreachable (and expire with their own TTL) instead of
+        // being overwritten.
+        Cache::add(self::VERSION_KEY, 1);
+        Cache::increment(self::VERSION_KEY);
     }
 
     private function shouldCache(Request $request): bool
@@ -106,6 +115,21 @@ class CachePublicPage
             return false;
         }
 
+        // Honour an explicit opt-out. Cookies queued through Laravel's cookie
+        // jar are flushed into the response *after* this middleware runs, so a
+        // CSRF/session cookie is invisible to the check above. Any controller
+        // that renders per-visitor state (a @csrf token, a form, flash data)
+        // should send `Cache-Control: no-store` to keep that response out of
+        // the shared cache.
+        //
+        // Only `no-store` is treated as the opt-out: Symfony stamps every
+        // response that does not set its own cache headers with the default
+        // `Cache-Control: no-cache, private`, so honouring `private`/`no-cache`
+        // would disable the cache for practically every page.
+        if ($response->headers->hasCacheControlDirective('no-store')) {
+            return false;
+        }
+
         return $response->getStatusCode() === 200
             && $response->getContent() !== false;
     }
@@ -125,6 +149,14 @@ class CachePublicPage
         if (config('page-cache.key.theme.enabled', true)) {
             $cookie = (string) config('page-cache.key.theme.cookie', 'theme');
             $segments[] = $request->cookie($cookie) === 'light' ? 'light' : 'dark';
+        }
+
+        if (config('page-cache.key.accept_encoding', true)) {
+            // Vary on the negotiated content encoding so a body compressed for a
+            // gzip/br client is never replayed to a client that cannot decode
+            // it. The header is normalized (tokens lowercased and sorted) so
+            // trivial ordering/whitespace differences collapse to one entry.
+            $segments[] = $this->normalizeAcceptEncoding((string) $request->header('Accept-Encoding', ''));
         }
 
         $segments[] = sha1($request->path());
@@ -155,6 +187,33 @@ class CachePublicPage
         unset($value);
 
         ksort($array);
+    }
+
+    private function normalizeAcceptEncoding(string $value): string
+    {
+        if ($value === '') {
+            return 'identity';
+        }
+
+        $tokens = [];
+
+        foreach (explode(',', $value) as $part) {
+            // Strip any quality value ("gzip;q=0.5" -> "gzip") and whitespace.
+            $token = strtolower(trim(explode(';', $part)[0]));
+
+            if ($token !== '') {
+                $tokens[$token] = true;
+            }
+        }
+
+        if ($tokens === []) {
+            return 'identity';
+        }
+
+        $tokens = array_keys($tokens);
+        sort($tokens);
+
+        return implode('+', $tokens);
     }
 
     private static function version(): int

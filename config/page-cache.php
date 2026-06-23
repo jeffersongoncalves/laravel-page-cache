@@ -59,6 +59,10 @@ return [
         // Include the current application locale in the cache key.
         'locale' => true,
 
+        // Vary the cache on the request's negotiated content encoding so a
+        // compressed body is never replayed to a client that cannot decode it.
+        'accept_encoding' => true,
+
         'theme' => [
             // Include the theme cookie value in the cache key.
             'enabled' => true,

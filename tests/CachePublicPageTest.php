@@ -121,6 +121,46 @@ it('replays the stored content type and headers on a cache hit', function () {
     expect($second->getContent())->toBe($first->getContent());
 });
 
+it('stores a separate cache entry per locale', function () {
+    app()->setLocale('en');
+    $this->get('/cached')->assertHeader('X-Page-Cache', 'MISS');
+
+    app()->setLocale('pt');
+    $this->get('/cached')->assertHeader('X-Page-Cache', 'MISS');
+
+    app()->setLocale('en');
+    $this->get('/cached')->assertHeader('X-Page-Cache', 'HIT');
+});
+
+it('does not cache non-GET requests', function () {
+    Route::middleware(['web', CachePublicPage::class])
+        ->post('/posted', fn () => (string) Str::uuid());
+
+    $this->post('/posted')->assertOk()->assertHeaderMissing('X-Page-Cache');
+    $this->post('/posted')->assertOk()->assertHeaderMissing('X-Page-Cache');
+});
+
+it('does not store responses opting out via Cache-Control: no-store', function () {
+    Route::middleware(['web', CachePublicPage::class])
+        ->get('/optout', fn () => response((string) Str::uuid())
+            ->header('Cache-Control', 'no-store'));
+
+    $this->get('/optout')->assertOk()->assertHeaderMissing('X-Page-Cache');
+    $this->get('/optout')->assertOk()->assertHeaderMissing('X-Page-Cache');
+});
+
+it('still caches a response carrying the default no-cache, private header', function () {
+    // Symfony stamps `Cache-Control: no-cache, private` on every response that
+    // does not set its own cache headers; that default must not be mistaken for
+    // an opt-out.
+    $first = $this->get('/cached');
+    $first->assertOk()
+        ->assertHeader('X-Page-Cache', 'MISS')
+        ->assertHeader('Cache-Control', 'no-cache, private');
+
+    $this->get('/cached')->assertOk()->assertHeader('X-Page-Cache', 'HIT');
+});
+
 it('caches forever when the ttl is zero', function () {
     config()->set('page-cache.ttl', 0);
 

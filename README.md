@@ -42,6 +42,9 @@ return [
     'key' => [
         'locale' => true,
 
+        // Vary the cache on the negotiated content encoding.
+        'accept_encoding' => true,
+
         'theme' => [
             'enabled' => true,
             'cookie' => 'theme',
@@ -72,9 +75,12 @@ To avoid leaking per-visitor state across visitors, the middleware **passes the 
 
 - the request is authenticated (`$request->user()` is not `null`);
 - there is no started session (so register it **after** `StartSession`);
-- the response sets its own cookies (`Set-Cookie`).
+- the response sets its own cookies (`Set-Cookie`);
+- the response sends `Cache-Control: no-store`.
 
-That last rule is a hard safety guard: **pages that render a CSRF token, a form, flash messages, or any guest-session content must not be cached**, because those responses carry a `Set-Cookie` header and would otherwise replay one visitor's token/session to everyone else. Keep such pages out of the cached route group entirely.
+`Cache-Control: no-store` is the explicit opt-out you should reach for whenever a page renders per-visitor state. (Only `no-store` is honoured: Symfony stamps the default `Cache-Control: no-cache, private` on every response that does not set its own cache headers, so `no-cache`/`private` cannot be used as opt-out signals without disabling the cache for every page.)
+
+> **Session/CSRF limitation — read this.** Laravel flushes queued cookies (the session cookie, `XSRF-TOKEN`, flash data) into the response **after** this middleware has already inspected it, so the `Set-Cookie` guard above cannot see them. A page that embeds a `@csrf` token in a `<form>` therefore looks cacheable, and caching it would replay one visitor's CSRF token to everyone else. **Any response that contains a CSRF token, a form, flash messages, or other guest-session content must mark itself with `Cache-Control: no-store`** (e.g. `return response($html)->header('Cache-Control', 'no-store');`) or be kept out of the cached route group entirely. There is no reliable way for the middleware to detect this for you.
 
 ### Invalidating the cache
 
@@ -101,7 +107,7 @@ class ProjectObserver
 
 ### Cache key
 
-By default the cache key is composed of the version token, the current locale, the theme cookie value, a hash of the request path, and a hash of a normalized (sorted) query string. You can disable the locale or theme segments — or change the theme cookie name — through the config file.
+By default the cache key is composed of the version token, the current locale, the negotiated `Accept-Encoding`, the theme cookie value, a hash of the request path, and a hash of a normalized (sorted) query string. You can disable the locale, `accept_encoding`, or theme segments — or change the theme cookie name — through the config file. The `Accept-Encoding` segment is normalized (tokens lowercased and sorted) so a body compressed for a gzip/br client is never replayed to a client that cannot decode it.
 
 The path (not the full URL) is used for the path segment, and the query string is normalized and hashed separately so that `?b=2&a=1` and `?a=1&b=2` collapse to the same entry while `/products?page=2` stays distinct from `/products?page=1`. If a route ignores the query string entirely you can drop it from the key by setting `include_query_string` to `false`.
 
