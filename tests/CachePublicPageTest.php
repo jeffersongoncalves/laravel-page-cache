@@ -54,6 +54,18 @@ it('does not cache responses that set their own cookies', function () {
     $this->get('/with-cookie')->assertOk()->assertHeaderMissing('X-Page-Cache');
 });
 
+it('still caches a response that only carries the routine session/XSRF cookies', function () {
+    Route::middleware(['web', CachePublicPage::class])
+        ->get('/with-routine-cookies', function () {
+            return response((string) Str::uuid())
+                ->cookie(session()->getName(), 'session-id')
+                ->cookie('XSRF-TOKEN', 'xsrf-value');
+        });
+
+    $this->get('/with-routine-cookies')->assertOk()->assertHeader('X-Page-Cache', 'MISS');
+    $this->get('/with-routine-cookies')->assertOk()->assertHeader('X-Page-Cache', 'HIT');
+});
+
 it('is a no-op when caching is disabled', function () {
     config()->set('page-cache.enabled', false);
 

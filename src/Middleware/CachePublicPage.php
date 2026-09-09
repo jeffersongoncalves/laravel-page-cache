@@ -108,11 +108,20 @@ class CachePublicPage
 
     private function shouldStore(Response $response): bool
     {
-        // Never cache a response that sets its own cookies: a Set-Cookie header
-        // usually carries CSRF tokens, fresh session ids or flash state that
-        // must not be replayed to a different visitor.
-        if (count($response->headers->getCookies()) > 0) {
-            return false;
+        // Never cache a response that sets its own cookies, EXCEPT the two
+        // routine ones Laravel queues on every request once a session is
+        // touched (session id + XSRF-TOKEN). Any Livewire full-page component
+        // boots the session to embed its CSRF token, so those two cookies are
+        // present on 100% of responses regardless of real personalization —
+        // without this carve-out shouldStore() would never cache anything on
+        // a Livewire-driven site. Any other Set-Cookie (flash message, a
+        // controller-set cookie) still disqualifies the response.
+        $routineCookies = [session()->getName(), 'XSRF-TOKEN'];
+
+        foreach ($response->headers->getCookies() as $cookie) {
+            if (! in_array($cookie->getName(), $routineCookies, true)) {
+                return false;
+            }
         }
 
         // Honour an explicit opt-out. Cookies queued through Laravel's cookie
