@@ -1,6 +1,6 @@
 <div class="filament-hidden">
 
-![Laravel Page Cache](https://raw.githubusercontent.com/jeffersongoncalves/laravel-page-cache/master/art/jeffersongoncalves-laravel-page-cache.png)
+![Laravel Page Cache](https://raw.githubusercontent.com/jeffersongoncalves/laravel-page-cache/main/art/jeffersongoncalves-laravel-page-cache.png)
 
 </div>
 
@@ -9,8 +9,8 @@
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-FFDD00?style=flat-square&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/jeffersongoncalves)
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/jeffersongoncalves/laravel-page-cache.svg?style=flat-square)](https://packagist.org/packages/jeffersongoncalves/laravel-page-cache)
-[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/jeffersongoncalves/laravel-page-cache/tests.yml?branch=master&label=tests&style=flat-square)](https://github.com/jeffersongoncalves/laravel-page-cache/actions?query=workflow%3Arun-tests+branch%3Amaster)
-[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/jeffersongoncalves/laravel-page-cache/fix-php-code-style-issues.yml?branch=master&label=code%20style&style=flat-square)](https://github.com/jeffersongoncalves/laravel-page-cache/actions?query=workflow%3A"Fix+PHP+code+styling"+branch%3Amaster)
+[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/jeffersongoncalves/laravel-page-cache/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/jeffersongoncalves/laravel-page-cache/actions?query=workflow%3Arun-tests+branch%3Amain)
+[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/jeffersongoncalves/laravel-page-cache/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/jeffersongoncalves/laravel-page-cache/actions?query=workflow%3A"Fix+PHP+code+styling"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/jeffersongoncalves/laravel-page-cache.svg?style=flat-square)](https://packagist.org/packages/jeffersongoncalves/laravel-page-cache)
 
 This Laravel package provides a full-page response cache middleware for stateless public GET pages. It caches 200 responses keyed by a version token, locale, and theme cookie, skips authenticated requests, exposes an `X-Page-Cache` HIT/MISS header, and offers a static `flush()` helper to invalidate every cached page at once.
