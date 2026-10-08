@@ -45,6 +45,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Stats
+    |--------------------------------------------------------------------------
+    |
+    | Count hits and misses since the last flush (PageCache::stats()). Costs one
+    | cache increment per cacheable request; disable it on hot paths that don't
+    | need the numbers.
+    |
+    */
+
+    'stats' => env('PAGE_CACHE_STATS', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Cache Key
     |--------------------------------------------------------------------------
     |

@@ -7,6 +7,7 @@ namespace JeffersonGoncalves\PageCache\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use JeffersonGoncalves\PageCache\PageCache;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -24,8 +25,6 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class CachePublicPage
 {
-    private const VERSION_KEY = 'pages:version';
-
     public function handle(Request $request, Closure $next): Response
     {
         if (! $this->shouldCache($request)) {
@@ -44,8 +43,12 @@ class CachePublicPage
                 $response->headers->set($name, $values);
             }
 
+            PageCache::recordHit();
+
             return $response->header('X-Page-Cache', 'HIT');
         }
+
+        PageCache::recordMiss();
 
         $response = $next($request);
 
@@ -79,16 +82,10 @@ class CachePublicPage
         return $response;
     }
 
-    /** Bump the version token to invalidate every cached page. */
+    /** Invalidate every cached page (kept for existing callers; same as PageCache::flush()). */
     public static function flush(): void
     {
-        // Atomic bump: read-modify-write (Cache::forever(version() + 1)) loses
-        // an increment when two flushes race. Seed the key if missing, then let
-        // the store increment it atomically. Old entries keyed on the previous
-        // version become unreachable (and expire with their own TTL) instead of
-        // being overwritten.
-        Cache::add(self::VERSION_KEY, 1);
-        Cache::increment(self::VERSION_KEY);
+        PageCache::flush();
     }
 
     private function shouldCache(Request $request): bool
@@ -101,7 +98,7 @@ class CachePublicPage
             return false;
         }
 
-        return (bool) config('page-cache.enabled', true)
+        return PageCache::isActive()
             && $request->isMethod('GET')
             && $request->user() === null;
     }
@@ -149,7 +146,7 @@ class CachePublicPage
         // cache with ?x=1,2,3… variants. Locale and theme are folded in only
         // when enabled, so pre-paint markup driven by the theme cookie is not
         // served to visitors with a different theme.
-        $segments = ['page', (string) self::version()];
+        $segments = ['page', (string) PageCache::version()];
 
         if (config('page-cache.key.locale', true)) {
             $segments[] = app()->getLocale();
@@ -168,7 +165,8 @@ class CachePublicPage
             $segments[] = $this->normalizeAcceptEncoding((string) $request->header('Accept-Encoding', ''));
         }
 
-        $segments[] = sha1($request->path());
+        // The per-path version lets PageCache::forget() drop every variant of one URL.
+        $segments[] = sha1($request->path()).'.'.PageCache::pathVersion($request->path());
 
         if (config('page-cache.include_query_string', true)) {
             // Fold a normalized (recursively sorted) query string into the key
@@ -223,10 +221,5 @@ class CachePublicPage
         sort($tokens);
 
         return implode('+', $tokens);
-    }
-
-    private static function version(): int
-    {
-        return (int) Cache::get(self::VERSION_KEY, 1);
     }
 }

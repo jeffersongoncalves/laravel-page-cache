@@ -41,6 +41,9 @@ return [
     // Fold a normalized query string into the cache key (safe default).
     'include_query_string' => env('PAGE_CACHE_INCLUDE_QUERY_STRING', true),
 
+    // Count hits/misses since the last flush (PageCache::stats()).
+    'stats' => env('PAGE_CACHE_STATS', true),
+
     'key' => [
         'locale' => true,
 
@@ -106,6 +109,22 @@ class ProjectObserver
 ```
 
 `flush()` bumps an internal version token, so every previously cached page is bypassed on the next request without touching individual cache keys.
+
+### Runtime controls
+
+`JeffersonGoncalves\PageCache\PageCache` keeps its state in the application cache, so it works without a deploy (and backs the [Filament plugin](https://github.com/jeffersongoncalves/filament-page-cache)):
+
+```php
+use JeffersonGoncalves\PageCache\PageCache;
+
+PageCache::flush();                    // every page (same as CachePublicPage::flush()); resets the counters
+PageCache::forget('/pt_BR/projects');  // every variant of one path: locales, themes, encodings, query strings
+PageCache::pause();                    // stop serving/storing cached pages...
+PageCache::resume();                   // ...and start again
+PageCache::stats();                    // ['enabled', 'paused', 'ttl', 'version', 'hits', 'misses', 'hit_ratio', 'flushed_at']
+```
+
+Hits and misses are counted since the last flush (one cache increment per cacheable request). Turn the counters off with `'stats' => false` (`PAGE_CACHE_STATS=false`).
 
 ### Cache key
 
