@@ -2,6 +2,10 @@
 
 All notable changes to `laravel-page-cache` will be documented in this file.
 
+## v1.3.0 - 2026-10-09
+
+Cached pages keep the CSP nonce they were rendered with (`Vite::cspNonce()`) and restore it on a HIT, so a CSP header built after this middleware — laravel-security-headers 2.1+ — matches the cached markup instead of blocking its inline scripts. Apps without a CSP nonce are unaffected.
+
 ## v1.2.0 - 2026-10-08
 
 Runtime controls, all stored in the application cache (no deploy needed):
