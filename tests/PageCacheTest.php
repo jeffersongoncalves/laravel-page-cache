@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\Str;
 use JeffersonGoncalves\PageCache\Middleware\CachePublicPage;
 use JeffersonGoncalves\PageCache\PageCache;
@@ -64,6 +65,25 @@ it('normalizes paths like Request::path()', function () {
         ->and(PageCache::normalizePath(''))->toBe('/')
         ->and(PageCache::normalizePath('/pt_BR/projects/'))->toBe('pt_BR/projects')
         ->and(PageCache::normalizePath('https://example.com/pt_BR/projects?page=2'))->toBe('pt_BR/projects');
+});
+
+it('restores the CSP nonce the cached markup was rendered with', function () {
+    Route::middleware(['web', CachePublicPage::class])->get('/nonce', fn () => '<script nonce="'.Vite::cspNonce().'"></script>');
+
+    Vite::useCspNonce('first-visitor');
+    $this->get('/nonce')->assertHeader('X-Page-Cache', 'MISS')->assertSee('nonce="first-visitor"', false);
+
+    Vite::useCspNonce('second-visitor');
+    $this->get('/nonce')->assertHeader('X-Page-Cache', 'HIT')->assertSee('nonce="first-visitor"', false);
+
+    expect(Vite::cspNonce())->toBe('first-visitor');
+});
+
+it('leaves the nonce alone when the app uses none', function () {
+    $this->get('/a');
+    $this->get('/a')->assertHeader('X-Page-Cache', 'HIT');
+
+    expect(Vite::cspNonce())->toBeNull();
 });
 
 it('keeps CachePublicPage::flush() working for existing callers', function () {

@@ -126,6 +126,10 @@ PageCache::stats();                    // ['enabled', 'paused', 'ttl', 'version'
 
 Hits and misses are counted since the last flush (one cache increment per cacheable request). Turn the counters off with `'stats' => false` (`PAGE_CACHE_STATS=false`).
 
+### CSP nonces
+
+If your pages carry a Content-Security-Policy nonce (Laravel's `Vite::cspNonce()`, used by `@vite` and Livewire), the cached entry keeps the nonce its markup was rendered with and hands it back to Vite on a HIT. A CSP header built afterwards — e.g. by [laravel-security-headers](https://github.com/jeffersongoncalves/laravel-security-headers) 2.1+, registered outside this middleware — then matches the cached HTML instead of blocking its scripts. The nonce is shared by everyone who gets that cached page until it expires or is flushed.
+
 ### Cache key
 
 By default the cache key is composed of the version token, the current locale, the negotiated `Accept-Encoding`, the theme cookie value, a hash of the request path, and a hash of a normalized (sorted) query string. You can disable the locale, `accept_encoding`, or theme segments — or change the theme cookie name — through the config file. The `Accept-Encoding` segment is normalized (tokens lowercased and sorted) so a body compressed for a gzip/br client is never replayed to a client that cannot decode it.

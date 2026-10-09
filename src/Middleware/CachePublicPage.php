@@ -7,6 +7,7 @@ namespace JeffersonGoncalves\PageCache\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Vite;
 use JeffersonGoncalves\PageCache\PageCache;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -33,10 +34,16 @@ class CachePublicPage
 
         $key = $this->cacheKey($request);
 
-        /** @var array{content: string, headers: array<string, array<int, string|null>>}|null $cached */
+        /** @var array{content: string, headers: array<string, array<int, string|null>>, nonce?: string|null}|null $cached */
         $cached = Cache::get($key);
 
         if ($cached !== null) {
+            // The cached markup carries the CSP nonce it was rendered with: hand it back to
+            // Vite so a CSP header built after this (laravel-security-headers) matches it.
+            if (($cached['nonce'] ?? null) !== null) {
+                Vite::useCspNonce($cached['nonce']);
+            }
+
             $response = response($cached['content'], 200);
 
             foreach ($cached['headers'] as $name => $values) {
@@ -65,6 +72,8 @@ class CachePublicPage
         $payload = [
             'content' => (string) $response->getContent(),
             'headers' => $headers,
+            // Nonce the markup was rendered with (null when the app uses no CSP nonce).
+            'nonce' => Vite::cspNonce(),
         ];
 
         $ttl = (int) config('page-cache.ttl', 3600);
