@@ -105,12 +105,14 @@ use JeffersonGoncalves\PageCache\Middleware\ServeCachedPage;
 })
 ```
 
-It only handles `GET` requests that carry **no** session cookie and **no** `remember_*` cookie, so they are guests by definition and need no auth lookup. It computes the same key as `CachePublicPage` (`PageCache::key()`): on a HIT it returns the stored page with no session and no `Set-Cookie`; on a MISS, or for any request with a session or remember cookie, it falls through to the normal stack, where `CachePublicPage` stores the page as it does today. Set `early.s_maxage` (`PAGE_CACHE_EARLY_S_MAXAGE`) to send `Cache-Control: public, s-maxage=N` on these HITs so a CDN can cache them. A CDN keys on the URL alone, so only turn it on when the page does not vary by theme cookie or locale for the same URL.
+It only handles `GET` requests that carry **no** session cookie and **no** `remember_*` cookie and no `Authorization` header, so they are guests by definition and need no auth lookup. It computes the same key as `CachePublicPage` (`PageCache::key()`): on a HIT it returns the stored page with no session and no `Set-Cookie`; on a MISS, or for any request with a session or remember cookie, it falls through to the normal stack, where `CachePublicPage` stores the page as it does today. Set `early.s_maxage` (`PAGE_CACHE_EARLY_S_MAXAGE`) to send `Cache-Control: public, s-maxage=N` on these HITs so a CDN can cache them. A CDN keys on the URL alone, so only turn it on when the page does not vary by theme cookie or locale for the same URL.
 
 Caveats:
 
 - **CSRF.** A page served this way has no session, so its CSRF token (`<meta name="csrf-token">`, Livewire's `data-csrf`) belongs to nobody. On interactive pages either limit the early path to crawlers (wrap or extend the middleware with e.g. `jaybizzle/crawler-detect`), or refresh the token on the client before the first form post or Livewire request.
 - **Key inputs.** The key is computed before `StartSession`, `EncryptCookies` and your route middleware. The locale must therefore already be known at that point (from the config or the URL, not from the session or a later middleware), or disable `key.locale`. The theme cookie must be excluded from encryption (`$middleware->encryptCookies(except: ['theme'])`), as a JavaScript-set theme cookie already has to be.
+- **Route middleware is skipped on a HIT.** The early path serves whatever `CachePublicPage` stored for the path without running the route's own middleware. If you put a cached route behind `auth` (or any other access check), call `PageCache::forget()` for it, or `PageCache::flush()`, when you deploy that change, or the page stored while it was public keeps being served until its TTL expires.
+- **CDN freshness.** With `s_maxage` set, `PageCache::flush()`, `forget()` and `pause()` only affect your application cache: the CDN keeps serving its copy until `s-maxage` expires. Purge the CDN when a change has to be visible immediately, or keep `s_maxage` short.
 
 ### Invalidating the cache
 

@@ -44,6 +44,14 @@ it('leaves requests with a remember-me cookie to the normal stack', function () 
     expect($hit->headers->getCookies())->not->toBeEmpty();
 });
 
+it('leaves requests with an Authorization header to the normal stack', function () {
+    $this->get('/early')->assertHeader('X-Page-Cache', 'MISS');
+
+    $hit = $this->withHeader('Authorization', 'Bearer token')->get('/early');
+
+    expect($hit->headers->getCookies())->not->toBeEmpty();
+});
+
 it('sends a shared Cache-Control on an early HIT when s_maxage is set', function () {
     config()->set('page-cache.early.s_maxage', 600);
 

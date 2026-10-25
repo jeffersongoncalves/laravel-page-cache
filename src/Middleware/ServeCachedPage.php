@@ -44,6 +44,11 @@ class ServeCachedPage
 
     private function carriesVisitorState(Request $request): bool
     {
+        // Credentials without cookies (basic auth, a bearer token) are not a guest either.
+        if ($request->headers->has('Authorization')) {
+            return true;
+        }
+
         // Runs before EncryptCookies, so only the cookie names are trusted here.
         foreach ($request->cookies->keys() as $name) {
             if ($name === config('session.cookie') || Str::startsWith((string) $name, 'remember_')) {
