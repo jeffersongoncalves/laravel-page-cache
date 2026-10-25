@@ -32,27 +32,13 @@ class CachePublicPage
             return $next($request);
         }
 
-        $key = $this->cacheKey($request);
+        // Computed before the request runs, so a locale switched by the route itself doesn't move the key.
+        $key = PageCache::key($request);
 
-        /** @var array{content: string, headers: array<string, array<int, string|null>>, nonce?: string|null}|null $cached */
-        $cached = Cache::get($key);
+        $cached = PageCache::cachedResponse($key);
 
         if ($cached !== null) {
-            // The cached markup carries the CSP nonce it was rendered with: hand it back to
-            // Vite so a CSP header built after this (laravel-security-headers) matches it.
-            if (($cached['nonce'] ?? null) !== null) {
-                Vite::useCspNonce($cached['nonce']);
-            }
-
-            $response = response($cached['content'], 200);
-
-            foreach ($cached['headers'] as $name => $values) {
-                $response->headers->set($name, $values);
-            }
-
-            PageCache::recordHit();
-
-            return $response->header('X-Page-Cache', 'HIT');
+            return $cached;
         }
 
         PageCache::recordMiss();
@@ -147,88 +133,5 @@ class CachePublicPage
 
         return $response->getStatusCode() === 200
             && $response->getContent() !== false;
-    }
-
-    private function cacheKey(Request $request): string
-    {
-        // Key on the PATH (not full URL) so the query string cannot flood the
-        // cache with ?x=1,2,3… variants. Locale and theme are folded in only
-        // when enabled, so pre-paint markup driven by the theme cookie is not
-        // served to visitors with a different theme.
-        $segments = ['page', (string) PageCache::version()];
-
-        if (config('page-cache.key.locale', true)) {
-            $segments[] = app()->getLocale();
-        }
-
-        if (config('page-cache.key.theme.enabled', true)) {
-            $cookie = (string) config('page-cache.key.theme.cookie', 'theme');
-            $segments[] = $request->cookie($cookie) === 'light' ? 'light' : 'dark';
-        }
-
-        if (config('page-cache.key.accept_encoding', true)) {
-            // Vary on the negotiated content encoding so a body compressed for a
-            // gzip/br client is never replayed to a client that cannot decode
-            // it. The header is normalized (tokens lowercased and sorted) so
-            // trivial ordering/whitespace differences collapse to one entry.
-            $segments[] = $this->normalizeAcceptEncoding((string) $request->header('Accept-Encoding', ''));
-        }
-
-        // The per-path version lets PageCache::forget() drop every variant of one URL.
-        $segments[] = sha1($request->path()).'.'.PageCache::pathVersion($request->path());
-
-        if (config('page-cache.include_query_string', true)) {
-            // Fold a normalized (recursively sorted) query string into the key
-            // so /products?page=2 is a distinct entry from /products?page=1
-            // while ?b=2&a=1 and ?a=1&b=2 collapse to the same key.
-            $query = $request->query();
-            $this->recursiveKsort($query);
-            $segments[] = sha1(http_build_query($query));
-        }
-
-        return implode(':', $segments);
-    }
-
-    /**
-     * @param  array<array-key, mixed>  $array
-     */
-    private function recursiveKsort(array &$array): void
-    {
-        foreach ($array as &$value) {
-            if (is_array($value)) {
-                $this->recursiveKsort($value);
-            }
-        }
-
-        unset($value);
-
-        ksort($array);
-    }
-
-    private function normalizeAcceptEncoding(string $value): string
-    {
-        if ($value === '') {
-            return 'identity';
-        }
-
-        $tokens = [];
-
-        foreach (explode(',', $value) as $part) {
-            // Strip any quality value ("gzip;q=0.5" -> "gzip") and whitespace.
-            $token = strtolower(trim(explode(';', $part)[0]));
-
-            if ($token !== '') {
-                $tokens[$token] = true;
-            }
-        }
-
-        if ($tokens === []) {
-            return 'identity';
-        }
-
-        $tokens = array_keys($tokens);
-        sort($tokens);
-
-        return implode('+', $tokens);
     }
 }

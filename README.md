@@ -44,6 +44,11 @@ return [
     // Count hits/misses since the last flush (PageCache::stats()).
     'stats' => env('PAGE_CACHE_STATS', true),
 
+    // Early path (ServeCachedPage): above 0 sends `Cache-Control: public, s-maxage=N` on its HITs.
+    'early' => [
+        's_maxage' => (int) env('PAGE_CACHE_EARLY_S_MAXAGE', 0),
+    ],
+
     'key' => [
         'locale' => true,
 
@@ -86,6 +91,26 @@ To avoid leaking per-visitor state across visitors, the middleware **passes the 
 `Cache-Control: no-store` is the explicit opt-out you should reach for whenever a page renders per-visitor state. (Only `no-store` is honoured: Symfony stamps the default `Cache-Control: no-cache, private` on every response that does not set its own cache headers, so `no-cache`/`private` cannot be used as opt-out signals without disabling the cache for every page.)
 
 > **Session/CSRF limitation — read this.** Laravel flushes queued cookies (the session cookie, `XSRF-TOKEN`, flash data) into the response **after** this middleware has already inspected it, so the `Set-Cookie` guard above cannot see them. A page that embeds a `@csrf` token in a `<form>` therefore looks cacheable, and caching it would replay one visitor's CSRF token to everyone else. **Any response that contains a CSRF token, a form, flash messages, or other guest-session content must mark itself with `Cache-Control: no-store`** (e.g. `return response($html)->header('Cache-Control', 'no-store');`) or be kept out of the cached route group entirely. There is no reliable way for the middleware to detect this for you.
+
+### Serving HITs before the session starts (opt-in)
+
+`CachePublicPage` runs after `StartSession`, so even a HIT starts a session (one session write per request with the `database` driver) and sends `Set-Cookie` for the session and `XSRF-TOKEN`, which keeps Cloudflare or any shared cache from caching the page. Prepend `ServeCachedPage` to the `web` group to answer those HITs before the session exists:
+
+```php
+// bootstrap/app.php
+use JeffersonGoncalves\PageCache\Middleware\ServeCachedPage;
+
+->withMiddleware(function (Middleware $middleware) {
+    $middleware->web(prepend: [ServeCachedPage::class]);
+})
+```
+
+It only handles `GET` requests that carry **no** session cookie and **no** `remember_*` cookie, so they are guests by definition and need no auth lookup. It computes the same key as `CachePublicPage` (`PageCache::key()`): on a HIT it returns the stored page with no session and no `Set-Cookie`; on a MISS, or for any request with a session or remember cookie, it falls through to the normal stack, where `CachePublicPage` stores the page as it does today. Set `early.s_maxage` (`PAGE_CACHE_EARLY_S_MAXAGE`) to send `Cache-Control: public, s-maxage=N` on these HITs so a CDN can cache them. A CDN keys on the URL alone, so only turn it on when the page does not vary by theme cookie or locale for the same URL.
+
+Caveats:
+
+- **CSRF.** A page served this way has no session, so its CSRF token (`<meta name="csrf-token">`, Livewire's `data-csrf`) belongs to nobody. On interactive pages either limit the early path to crawlers (wrap or extend the middleware with e.g. `jaybizzle/crawler-detect`), or refresh the token on the client before the first form post or Livewire request.
+- **Key inputs.** The key is computed before `StartSession`, `EncryptCookies` and your route middleware. The locale must therefore already be known at that point (from the config or the URL, not from the session or a later middleware), or disable `key.locale`. The theme cookie must be excluded from encryption (`$middleware->encryptCookies(except: ['theme'])`), as a JavaScript-set theme cookie already has to be.
 
 ### Invalidating the cache
 
