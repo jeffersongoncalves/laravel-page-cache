@@ -58,6 +58,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Early Path (ServeCachedPage)
+    |--------------------------------------------------------------------------
+    |
+    | When above 0, a HIT served by the ServeCachedPage middleware (before the
+    | session starts, so it carries no cookie) is sent with
+    | `Cache-Control: public, s-maxage=N` so a CDN can cache it for N seconds.
+    |
+    */
+
+    'early' => [
+        's_maxage' => (int) env('PAGE_CACHE_EARLY_S_MAXAGE', 0),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Cache Key
     |--------------------------------------------------------------------------
     |
