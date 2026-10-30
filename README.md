@@ -135,7 +135,7 @@ class ProjectObserver
 }
 ```
 
-`flush()` bumps an internal version token, so every previously cached page is bypassed on the next request without touching individual cache keys.
+`flush()` bumps an internal version token, so every previously cached page is bypassed on the next request without touching individual cache keys. On a store that supports tags (Redis, Memcached, array) the payloads are tagged and `flush()` also deletes the superseded ones, so pages cached forever (`ttl` 0) don't pile up across releases. On the file and database stores the old payloads stay until their TTL expires, so prefer a finite `ttl` there.
 
 ### Runtime controls
 
