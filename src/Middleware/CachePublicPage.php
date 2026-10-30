@@ -6,7 +6,6 @@ namespace JeffersonGoncalves\PageCache\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Vite;
 use JeffersonGoncalves\PageCache\PageCache;
 use Symfony\Component\HttpFoundation\Response;
@@ -67,9 +66,9 @@ class CachePublicPage
         if ($ttl <= 0) {
             // A TTL of 0 (or below) means "cache forever" rather than silently
             // disabling the cache.
-            Cache::forever($key, $payload);
+            PageCache::pages()->forever($key, $payload);
         } else {
-            Cache::put($key, $payload, $ttl);
+            PageCache::pages()->put($key, $payload, $ttl);
         }
 
         $response->headers->set('X-Page-Cache', 'MISS');

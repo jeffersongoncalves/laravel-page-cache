@@ -135,7 +135,7 @@ class ProjectObserver
 }
 ```
 
-`flush()` bumps an internal version token, so every previously cached page is bypassed on the next request without touching individual cache keys.
+`flush()` bumps an internal version token, so every previously cached page is bypassed on the next request without touching individual cache keys. On a store that supports tags (Redis, Memcached, array) the payloads are tagged and `flush()` also deletes the superseded ones, so pages cached forever (`ttl` 0) don't pile up across releases. On the file and database stores the old payloads stay until their TTL expires, so prefer a finite `ttl` there.
 
 ### Runtime controls
 
@@ -150,6 +150,15 @@ PageCache::pause();                    // stop serving/storing cached pages...
 PageCache::resume();                   // ...and start again
 PageCache::stats();                    // ['enabled', 'paused', 'ttl', 'version', 'hits', 'misses', 'hit_ratio', 'flushed_at']
 ```
+
+The same flush and forget are available from the command line:
+
+```bash
+php artisan page-cache:flush
+php artisan page-cache:forget /pt_BR/projects
+```
+
+Cached pages live in the application cache, which survives a release swap, so a deploy that changes templates or code keeps serving the previous release's markup until the TTL expires. Run `php artisan page-cache:flush` in your deploy script after the new release is activated.
 
 Hits and misses are counted since the last flush (one cache increment per cacheable request). Turn the counters off with `'stats' => false` (`PAGE_CACHE_STATS=false`).
 

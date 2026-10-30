@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace JeffersonGoncalves\PageCache;
 
+use Illuminate\Cache\TaggableStore;
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
@@ -27,6 +29,14 @@ final class PageCache
 
     private const FLUSHED_AT_KEY = 'pages:flushed_at';
 
+    private const PAGES_TAG = 'page-cache';
+
+    /** Where the page payloads live: tagged when the store supports it, so flush() can delete them. */
+    public static function pages(): Repository
+    {
+        return Cache::getStore() instanceof TaggableStore ? Cache::tags(self::PAGES_TAG) : Cache::store();
+    }
+
     /** Invalidate every cached page and reset the counters. */
     public static function flush(): void
     {
@@ -34,6 +44,12 @@ final class PageCache
         // lose an increment. Entries keyed on the old version become unreachable and expire with their own TTL.
         Cache::add(self::VERSION_KEY, 1);
         Cache::increment(self::VERSION_KEY);
+
+        // On a taggable store also delete the superseded payloads, so pages stored forever (ttl 0) don't pile up
+        // across releases. Other stores (file, database) rely on the version bump and the payloads' own TTL.
+        if (Cache::getStore() instanceof TaggableStore) {
+            Cache::tags(self::PAGES_TAG)->flush();
+        }
 
         Cache::forget(self::HITS_KEY);
         Cache::forget(self::MISSES_KEY);
@@ -160,7 +176,7 @@ final class PageCache
     public static function cachedResponse(string $key): ?Response
     {
         /** @var array{content: string, headers: array<string, array<int, string|null>>, nonce?: string|null}|null $cached */
-        $cached = Cache::get($key);
+        $cached = self::pages()->get($key);
 
         if ($cached === null) {
             return null;

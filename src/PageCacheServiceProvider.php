@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace JeffersonGoncalves\PageCache;
 
+use JeffersonGoncalves\PageCache\Commands\FlushCommand;
+use JeffersonGoncalves\PageCache\Commands\ForgetCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -13,6 +15,7 @@ class PageCacheServiceProvider extends PackageServiceProvider
     {
         $package
             ->name('laravel-page-cache')
-            ->hasConfigFile();
+            ->hasConfigFile()
+            ->hasCommands([FlushCommand::class, ForgetCommand::class]);
     }
 }
