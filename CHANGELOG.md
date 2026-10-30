@@ -2,6 +2,24 @@
 
 All notable changes to `laravel-page-cache` will be documented in this file.
 
+## v1.5.0 - 2026-10-30
+
+### What's new
+
+- `php artisan page-cache:flush` invalidates every cached page (wraps `PageCache::flush()`). Run it in your deploy script after the new release is activated. (#17)
+- `php artisan page-cache:forget {path}` invalidates every variant of one path or URL (wraps `PageCache::forget()`).
+
+### Fixes
+
+- On stores that support tags (Redis, Memcached, array), page payloads are now tagged and `flush()` deletes the superseded ones, so pages cached forever (`ttl` 0) no longer accumulate across releases. File and database stores keep the version-bump behavior.
+
+### Upgrade notes
+
+- Pages cached before this release are stored untagged and become a one-time MISS after upgrading. Untagged entries stored forever are not removed automatically.
+- On Redis with a finite TTL, schedule `cache:prune-stale-tags` to trim expired entries from tag sets.
+
+**Full Changelog**: https://github.com/jeffersongoncalves/laravel-page-cache/compare/v1.4.0...v1.5.0
+
 ## v1.4.0 - 2026-10-24
 
 ### Added
